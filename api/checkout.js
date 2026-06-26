@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-    // Headers CORS para permitir llamadas desde Framer
     res.setHeader("Access-Control-Allow-Origin", "*")
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS")
     res.setHeader("Access-Control-Allow-Headers", "Content-Type")
@@ -9,27 +8,32 @@ export default async function handler(req, res) {
 
     const { items, total } = req.body
 
+    // Construir los parámetros en formato URL (como requiere Páguelo Fácil)
+    const params = new URLSearchParams({
+        CCLW: process.env.PAGUELO_FACIL_CCLW,
+        CMTN: total.toString(),
+        CDSC: `Reserva Moses Bike Rentals - ${items.length} item(s)`,
+        RETURN_URL: Buffer.from("https://mosesbikerentals.com/gracias").toString("hex"),
+    })
+
     try {
-        const response = await fetch("https://paguelofacil.com/ext/pagoBotonW", {
+        const response = await fetch("https://secure.paguelofacil.com/LinkDeamon.cfm", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${process.env.PAGUELO_FACIL_API_KEY}`
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": process.env.PAGUELO_FACIL_API_KEY
             },
-            body: JSON.stringify({
-                cclw: process.env.PAGUELO_FACIL_CCLW,
-                amount: total,
-                taxAmount: 0,
-                description: `Reserva Moses Bike Rentals ${items.length} item(s)`,
-                success_url: "https://mosesbikerentals.com/gracias",
-                cancel_url: "https://mosesbikerentals.com/error",
-                lang: "ES"
-            })
+            body: params.toString()
         })
 
         const data = await response.json()
-        console.log("Páguelo Fácil response:", data)
-        return res.status(200).json({ urlPago: data.url || data.link || data.paymentUrl })
+        console.log("Páguelo Fácil response:", JSON.stringify(data))
+
+        if (data && data.data && data.data.url) {
+            return res.status(200).json({ urlPago: data.data.url })
+        } else {
+            return res.status(500).json({ error: "No se recibió URL de pago", detalle: data })
+        }
 
     } catch (error) {
         console.error("Error:", error)
